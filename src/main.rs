@@ -1,36 +1,43 @@
-use actix_files::Files;
-use actix_web::{App, Error, HttpRequest, HttpResponse, HttpServer, get, web};
-use futures_util::StreamExt;
+mod server;
+mod chat_room;
 
-#[get("/ws")]
-async fn ws_endpoint(
-    req: HttpRequest,
-    body: web::Payload
-) -> Result<HttpResponse, Error> {
-    let (response, mut session, mut stream) = actix_ws::handle(&req, body)?;
+use actix::prelude::*;
+use server::{ChatServer, Join, Connect, Message};
 
-    actix_web::rt::spawn(async move {
-        while let Some(Ok(msg)) = stream.next().await {
-            if let actix_ws::Message::Text(text) = msg {
-                if session.text(text).await.is_err() {
-                    break;
-                }
-            }
-        }
-    });
+struct TestClient;
 
-    Ok(response)
+impl Actor for TestClient {
+    type Context = Context<Self>;
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    println!("Server läuft auf http://127.0.0.1:8080");
-    HttpServer::new(|| {
-        App::new()
-            .service(ws_endpoint)
-            .service(Files::new("/", "./static").index_file("index.html"))
+impl Handler<Message> for TestClient {
+    type Result = ();
+
+    fn handle(&mut self, msg: Message, _: &mut Context<Self>) {
+        println!("Nachricht empfangen: {}", msg.0);
+    }
+}
+
+
+#[actix::main]
+async fn main(){
+
+    let server = server::ChatServer::new().start();
+
+    let client = TestClient.start();
+
+    let id = server.send(Connect {
+        client_addr: client.recipient(),
+        name: "TestClient".to_string()
     })
-    .bind(("127.0.0.1", 8080))?
-    .run()
     .await
+    .expect("Connection failed");
+
+    server.send(Join {
+        room: "test".to_string(),
+        client_id: id
+    })
+    .await
+    .expect("Join failed");
+
 }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+actix = "0.13.5"
 actix-files = "0.7.0"
 actix-web = "4.15.0"
 actix-ws = "0.4.0"

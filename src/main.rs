@@ -2,7 +2,8 @@ mod chat_room;
 mod server;
 
 use actix::prelude::*;
-use server::{Connect, Join, ServerMessage};
+use server::{Connect, Join, ServerMessage, ClientMessage};
+use std::time::Duration;
 
 struct TestClient;
 
@@ -39,4 +40,16 @@ async fn main() {
         })
         .await
         .expect("Join failed");
+
+    server
+        .send(ClientMessage {
+            id,
+            msg: "Hello, World!".to_string(),
+            room: "test".to_string(),
+        })
+        .await
+        .expect("Message sending failed");
+
+    actix::clock::sleep(Duration::from_millis(100)).await;
 }
+

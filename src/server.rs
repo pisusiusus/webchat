@@ -161,3 +161,41 @@ impl Handler<Leave> for ChatServer {
         }
     }
 }
+
+impl Handler<ClientMessage> for ChatServer {
+    type Result = ();
+
+    fn handle(&mut self, msg: ClientMessage, _: &mut Context<Self>) {
+        let Some(client) = self.clients.get(&msg.id) else {
+            return;
+        };
+        let Some(room) = self.rooms.get(&msg.room) else  {
+            return;
+        };
+
+        if !room.get_members().contains(&msg.id) {
+            return;
+        } 
+        
+        if msg.msg.trim().is_empty() {
+            return;
+        }
+
+        if msg.msg.chars().count() > 1000 {
+            return;
+        }
+
+        let sender_name = client.name.clone();
+
+        let server_message = ServerMessage {
+            sender_id: msg.id,
+            sender_name,
+            text: msg.msg,
+            room: msg.room,
+            timestamp: chrono::Utc::now().timestamp_millis() as u64,
+        };
+
+        self.send_message(&server_message.room, &server_message);
+
+    }
+}

@@ -15,8 +15,8 @@ impl ChatRoom {
         self.clients.insert(client_id)
     }
 
-    pub fn leave(&mut self, client_id: u64) {
-        self.clients.remove(&client_id);
+    pub fn leave(&mut self, client_id: u64) -> bool {
+        self.clients.remove(&client_id)
     }
 
     pub fn get_members(&self) -> &HashSet<u64> {

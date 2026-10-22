@@ -129,6 +129,15 @@ impl Handler<Disconnect> for ChatServer {
 
     fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) {
         self.clients.remove(&msg.client_id);
+
+        for (room_name, room) in self.rooms.iter_mut() {
+            if room.leave(msg.client_id) {
+                println!(
+                    "Client {} hat den Raum {} verlassen",
+                    msg.client_id, room_name
+                );
+            } 
+        }
     }
 }
 

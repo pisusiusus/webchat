@@ -1,8 +1,7 @@
+use std::collections::HashSet;
 
-use std::collections::{HashMap,HashSet};
-
-pub struct ChatRoom{
-    pub clients: HashSet<u64>,  
+pub struct ChatRoom {
+    pub clients: HashSet<u64>,
 }
 
 impl ChatRoom {
@@ -21,8 +20,6 @@ impl ChatRoom {
     }
 
     pub fn get_members(&self) -> &HashSet<u64> {
-        &self.clients 
+        &self.clients
     }
-
 }
-

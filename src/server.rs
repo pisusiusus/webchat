@@ -2,42 +2,50 @@ use crate::chat_room::ChatRoom;
 use actix::prelude::*;
 use std::collections::HashMap;
 
-//Message
-#[derive(Message)]
+/// Nachricht vom Server an einen Client. Wird an alle Mitglieder eines Raums verteilt.
+#[derive(Message, Clone)]
 #[rtype(result = "()")]
-pub struct ServerMessage(pub String);
+pub struct ServerMessage {
+    pub sender_id: u64,
+    pub sender_name: String,
+    pub text: String,
+    pub room: String,
+    pub timestamp: u64,
+}
 
-//ChatServer Actor
+/// Zentraler Actor des Chats. Verwaltet alle Clients und Räume. Da Actors Nachrichten nacheinander verarbeiten, braucht der Zustand keine Locks.
 pub struct ChatServer {
-    //Speichert den Raumname und die dazugehörigen Client ID's
+    ///Speichert den Raumname und die dazugehörigen Client ID's
     pub rooms: HashMap<String, ChatRoom>,
-    //Speichern von Empfängeradressen unter einer Client ID
+    ///Speichern von Empfängeradressen unter einer Client ID
     pub clients: HashMap<u64, Client>,
     pub next_client_id: u64,
 }
 
+/// Ein verbundener Client.
 pub struct Client {
     pub name: String,
     pub addr: Recipient<ServerMessage>,
 }
 
+/// Ein Client möchte eine Nachricht in einen Raum schreiben.
 #[derive(Message)]
 #[rtype(result = "()")]
-//Message from Client -> Server
 pub struct ClientMessage {
     pub id: u64,
     pub msg: String,
     pub room: String,
 }
 
+/// Ein Client tritt einem Raum bei. Existiert der Raum nicht, wird er angelegt.
 #[derive(Message)]
 #[rtype(result = "()")]
-//Client tritt Room bei
 pub struct Join {
     pub room: String,
     pub client_id: u64,
 }
 
+/// Ein Client verlässt einen Raum.
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Leave {
@@ -45,17 +53,17 @@ pub struct Leave {
     pub client_id: u64,
 }
 
+/// Registriert einen neuen Client beim Server. Antwortet mit der vergebenen Client-ID.
 #[derive(Message)]
 #[rtype(result = "u64")]
-//Client Connect -> Registrieren als Client
 pub struct Connect {
     pub client_addr: Recipient<ServerMessage>,
     pub name: String,
 }
 
+/// Ein Client hat die Verbindung beendet und wird entfernt.
 #[derive(Message)]
 #[rtype(result = "()")]
-//Client Disconnect
 pub struct Disconnect {
     pub client_id: u64,
 }
@@ -64,8 +72,8 @@ impl Actor for ChatServer {
     type Context = Context<Self>;
 }
 
-//chatServer Konstruktor
 impl ChatServer {
+    /// Erstellt einen leeren Server mit dem Standardraum "welcome".
     pub fn new() -> ChatServer {
         let mut rooms = HashMap::new();
         rooms.insert("welcome".to_string(), ChatRoom::new());
@@ -79,12 +87,12 @@ impl ChatServer {
 }
 
 impl ChatServer {
-    //Nachricht an alle Clients in einem Raum senden.
-    pub fn send_message(&self, room: &str, message: &str) {
+    /// Schickt eine Kopie der Nachricht an alle Mitglieder des Raums. Unbekannte IDs werden übersprungen.
+    pub fn send_message(&self, room: &str, message: &ServerMessage) {
         if let Some(chat_room) = self.rooms.get(room) {
             for client_id in chat_room.get_members() {
                 if let Some(client) = self.clients.get(&client_id) {
-                    client.addr.do_send(ServerMessage(message.to_string()));
+                    client.addr.do_send(message.clone());
                 }
             }
         }
@@ -105,7 +113,7 @@ impl Handler<Connect> for ChatServer {
 
         println!("Client verbunden mit id: {}", client_id);
 
-        //standardmäßig mit 'welcome' verbinden
+        // Jeder neue Client landet automatisch in "welcome", damit er sofort chatten kann.
         self.rooms
             .entry("welcome".to_string())
             .or_insert_with(ChatRoom::new)
@@ -115,6 +123,7 @@ impl Handler<Connect> for ChatServer {
     }
 }
 
+// TODO: Client auch aus allen Räumen entfernen.
 impl Handler<Disconnect> for ChatServer {
     type Result = ();
 

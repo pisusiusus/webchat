@@ -14,7 +14,7 @@ impl Handler<ServerMessage> for TestClient {
     type Result = ();
 
     fn handle(&mut self, msg: ServerMessage, _: &mut Context<Self>) {
-        println!("Nachricht empfangen: {}", msg.0);
+        println!("Nachricht empfangen: {} - {}", msg.sender_name, msg.text);
     }
 }
 

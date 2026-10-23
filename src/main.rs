@@ -2,7 +2,7 @@ mod chat_room;
 mod server;
 
 use actix::prelude::*;
-use server::{Connect, Join, ServerMessage, ClientMessage, Disconnect};
+use server::{ClientMessage, Connect, Disconnect, Join, ServerMessage};
 use std::time::Duration;
 
 struct TestClient;
@@ -51,12 +51,9 @@ async fn main() {
         .expect("Message sending failed");
 
     server
-        .send(Disconnect{
-            client_id: id
-        })
+        .send(Disconnect { client_id: id })
         .await
         .expect("Disconnecting from room failed.");
 
     actix::clock::sleep(Duration::from_millis(100)).await;
 }
-

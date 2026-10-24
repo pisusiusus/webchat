@@ -22,7 +22,7 @@ impl Actor for ChatSession {
                 ctx.ping(b"");
                 println!("Heartbeat-Timeout, Verbindung wird getrennt.");
                 ctx.stop();
-                return
+                return;
             }
         });
     }
@@ -35,17 +35,13 @@ impl Actor for ChatSession {
 impl ChatSession {
     pub fn new() -> ChatSession {
         ChatSession {
-            last_heard_from_client: Instant::now()
+            last_heard_from_client: Instant::now(),
         }
     }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ChatSession {
-    fn handle(
-        &mut self,
-        item: Result<ws::Message, ws::ProtocolError>,
-        ctx: &mut Self::Context,
-    ) {
+    fn handle(&mut self, item: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         match item {
             Ok(ws::Message::Text(text)) => ctx.text(text),
             Ok(ws::Message::Close(reason)) => {
@@ -53,10 +49,12 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ChatSession {
                 ctx.stop()
             }
             Err(_) => ctx.stop(),
-            Ok(ws::Message::Ping(bytes)) => {self.last_heard_from_client = Instant::now();
-                                                    ctx.pong(&bytes)},
+            Ok(ws::Message::Ping(bytes)) => {
+                self.last_heard_from_client = Instant::now();
+                ctx.pong(&bytes)
+            }
             Ok(ws::Message::Pong(_)) => self.last_heard_from_client = Instant::now(), // TODO
-            Ok(ws::Message::Binary(_)) => {}, // TODO
+            Ok(ws::Message::Binary(_)) => {}                                          // TODO
             _ => {}
         }
     }

@@ -4,6 +4,7 @@ use actix_web::{App, Error, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web_actors::ws;
 
 mod chat_room;
+mod protocol;
 mod server;
 mod session;
 

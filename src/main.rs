@@ -27,5 +27,5 @@ async fn main() -> std::io::Result<()> {
 }
 
 async fn ws_route(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    ws::start(session::ChatSession, &req, stream)
+    ws::start(session::ChatSession::new(), &req, stream)
 }

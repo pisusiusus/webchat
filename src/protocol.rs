@@ -47,7 +47,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_login_json() {
+    fn login_json_becomes_login_message() {
         let login_message = IncomingMessage::Login {
             name: "Alice".to_string(),
         };
@@ -61,7 +61,7 @@ mod tests {
     }
 
     #[test]
-    fn test_incoming_message_chat() {
+    fn chat_json_becomes_chat_message() {
         let chat_message = IncomingMessage::Chat {
             text: "Hallo".to_string(),
         };
@@ -75,7 +75,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_type() {
+    fn unknown_type_is_rejected() {
         let own_message = r#"{"type":"unknown", "text":"Hallo"}"#;
 
         let json_data: Result<IncomingMessage, serde_json::Error> =
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn test_broken_json() {
+    fn broken_json_is_rejected() {
         let own_message = r#"{"type":"chat", "te"#;
 
         let json_data: Result<IncomingMessage, serde_json::Error> =
@@ -112,7 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn test_error() {
+    fn error_code_is_written_in_snake_case() {
         let outgoing_message = OutgoingMessage::Error {
             code: ErrorCode::NotLoggedIn,
             message: ("Bitte zuerst anmelden.".to_string()),

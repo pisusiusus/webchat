@@ -3,6 +3,8 @@ use actix_files::Files;
 use actix_web::{App, Error, HttpRequest, HttpResponse, HttpServer, web};
 use actix_web_actors::ws;
 
+use crate::{server::ChatServer, session::ChatSession};
+
 mod chat_room;
 mod protocol;
 mod server;
@@ -27,6 +29,14 @@ async fn main() -> std::io::Result<()> {
     .await
 }
 
-async fn ws_route(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
-    ws::start(session::ChatSession::new(), &req, stream)
+async fn ws_route(
+    req: HttpRequest,
+    stream: web::Payload,
+    shared_address: web::Data<Addr<ChatServer>>,
+) -> Result<HttpResponse, Error> {
+    ws::start(
+        ChatSession::new(shared_address.get_ref().clone()),
+        &req,
+        stream,
+    )
 }

@@ -311,7 +311,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn everybody_gets_message() {
+    async fn all_room_members_receive_message() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn all_fields_correct() {
+    async fn message_contains_correct_fields() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;
@@ -363,7 +363,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn message_ignored_if_too_long() {
+    async fn too_long_message_is_ignored() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;
@@ -376,7 +376,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn thousand_emojis_accepted() {
+    async fn length_limit_counts_characters_not_bytes() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;
@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn write_to_non_existent_room() {
+    async fn message_to_unknown_room_is_ignored() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;
@@ -415,7 +415,7 @@ mod tests {
     }
 
     #[actix::test]
-    async fn sender_outside_the_room() {
+    async fn non_member_cannot_write_to_room() {
         let server = ChatServer::new().start();
 
         let (id_alice, receiver_alice) = connect(&server, "Alice").await;

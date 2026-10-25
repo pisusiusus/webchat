@@ -1,8 +1,12 @@
+//! Der Kern des Chats: verwaltet Clients und Räume und verteilt Nachrichten.
+//! Kennt weder JSON noch WebSockets. Die Übersetzung übernimmt die `ChatSession`.
+
 use crate::chat_room::ChatRoom;
 use actix::prelude::*;
 use std::collections::HashMap;
 
-/// Nachricht vom Server an einen Client. Wird an alle Mitglieder eines Raums verteilt.
+/// Nachricht vom Server an einen Client.
+/// `Clone`, weil jedes Raummitglied eine eigene Kopie bekommt.
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct ServerMessage {
@@ -13,25 +17,33 @@ pub struct ServerMessage {
     pub timestamp: u64,
 }
 
-/// Zentraler Actor des Chats. Verwaltet alle Clients und Räume. Da Actors Nachrichten nacheinander verarbeiten, braucht der Zustand keine Locks.
+/// Zentraler Actor des Chats. Existiert genau einmal.
+/// Da Actors Nachrichten nacheinander verarbeiten, braucht der Zustand keine Locks.
 pub struct ChatServer {
     ///Speichert den Raumname und die dazugehörigen Client ID's
     pub rooms: HashMap<String, ChatRoom>,
     ///Speichern von Empfängeradressen unter einer Client ID
     pub clients: HashMap<u64, Client>,
+    /// IDs werden nie wiederverwendet, auch nicht nach einem Disconnect.
     pub next_client_id: u64,
 }
 
-/// Ein verbundener Client.
+/// Der Eintrag des ChatServers über einen verbundenen Client.
 pub struct Client {
     pub name: String,
+    /// Hierhin werden `ServerMessage`s zugestellt.
+    /// Dahinter steckt eine WebSocket-Session oder, in Tests, ein Test-Client.
     pub addr: Recipient<ServerMessage>,
 }
 
 /// Ein Client möchte eine Nachricht in einen Raum schreiben.
+/// Ungültige Nachrichten werden stillschweigend verworfen: unbekannter Absender,
+/// kein Raummitglied, leerer Text oder mehr als 1000 Zeichen.
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct ClientMessage {
+    /// Wird von der Session gesetzt, nie vom Browser.
+    /// So kann niemand im Namen eines anderen schreiben.
     pub id: u64,
     pub msg: String,
     pub room: String,
@@ -53,7 +65,8 @@ pub struct Leave {
     pub client_id: u64,
 }
 
-/// Registriert einen neuen Client beim Server. Antwortet mit der vergebenen Client-ID.
+/// Registriert einen neuen Client und fügt ihn dem Raum "welcome" hinzu.
+/// Antwortet mit der vergebenen Client-ID.
 #[derive(Message)]
 #[rtype(result = "u64")]
 pub struct Connect {
@@ -61,7 +74,7 @@ pub struct Connect {
     pub name: String,
 }
 
-/// Ein Client hat die Verbindung beendet und wird entfernt.
+/// Entfernt einen Client vom Server und aus allen Räumen.
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Disconnect {
@@ -87,7 +100,8 @@ impl ChatServer {
 }
 
 impl ChatServer {
-    /// Schickt eine Kopie der Nachricht an alle Mitglieder des Raums. Unbekannte IDs werden übersprungen.
+    /// Schickt eine Kopie der Nachricht an alle Mitglieder des Raums, auch an den Absender.
+    /// Unbekannte IDs werden übersprungen.
     pub fn send_message(&self, room: &str, message: &ServerMessage) {
         if let Some(chat_room) = self.rooms.get(room) {
             for client_id in chat_room.get_members() {
@@ -217,6 +231,9 @@ mod tests {
     };
 
     use super::*;
+
+    /// Test-Client, der jede empfangene Nachricht in einen Kanal legt,
+    /// damit der Test sie danach prüfen kann.
     struct RecordingClient {
         sender_end: Sender<ServerMessage>,
     }
@@ -229,10 +246,12 @@ mod tests {
         type Result = ();
 
         fn handle(&mut self, msg: ServerMessage, _: &mut Context<Self>) {
+            // Schlägt nur fehl, wenn der Test schon vorbei ist.
             let _ = self.sender_end.send(msg);
         }
     }
 
+    /// Startet einen Test-Client, meldet ihn an und gibt ID und Posteingang zurück.
     async fn connect(
         server: &Addr<ChatServer>,
         client_name: &str,
@@ -247,7 +266,7 @@ mod tests {
                 name: client_name.to_string(),
             })
             .await
-            .expect("Unable to connect to server.");
+            .expect("Verbindung zum ChatServer fehlgeschlagen.");
 
         (id, receiver)
     }
@@ -260,9 +279,12 @@ mod tests {
                 room: sent_to_room.to_string(),
             })
             .await
-            .expect("Could not send message.");
+            .expect("Nachricht konnte nicht gesendet werden.");
     }
 
+    /// Wartet kurz und gibt dann alles zurück, was bisher angekommen ist.
+    /// Die Pause ist nötig, weil der chatServer mit `do_send` zustellt,
+    /// also ohne auf den Empfänger zu warten.
     async fn received(receiver: &Receiver<ServerMessage>) -> Vec<ServerMessage> {
         actix::clock::sleep(Duration::from_millis(50)).await;
         receiver.try_iter().collect()
@@ -275,14 +297,14 @@ mod tests {
                 client_id: id,
             })
             .await
-            .expect("Could not join room.");
+            .expect("Raum konnte nicht betreten werden.");
     }
 
     async fn disconnect(server: &Addr<ChatServer>, id: u64) {
         server
             .send(Disconnect { client_id: id })
             .await
-            .expect("Client was unable to disconnect from server");
+            .expect("Trennen vom ChatServer fehlgeschlagen.");
     }
 
     #[actix::test]
@@ -339,7 +361,10 @@ mod tests {
 
         let messages_alice = received(&receiver_alice).await;
 
-        assert!(!messages_alice.is_empty(), "Error no message arrived.");
+        assert!(
+            !messages_alice.is_empty(),
+            "Es ist keine Nachricht angekommen."
+        );
 
         assert_eq!(messages_alice[0].sender_id, id_alice);
         assert_eq!(messages_alice[0].sender_name, "Alice");

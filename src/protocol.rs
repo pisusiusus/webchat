@@ -1,23 +1,36 @@
+//! Die JSON-Nachrichten zwischen Browser und Server.
+//! Varianten- und Feldnamen sind gleichzeitig die JSON-Namen.
+//! Umbennenen ändert das Protokoll.
+
 use serde::{Deserialize, Serialize};
 
+/// Nachrichten vom Browser an den Server.
+/// `tag = "type"`: Die Variante steht im JSON-Feld `type`,
+/// z. B. wird `Login` zu `"type":"login", ...`.
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum IncomingMessage {
-    Login { name: String },
+    /// Muss die erste Nachricht einer Verbindung sein.
+    Login {
+        name: String,
+    },
 
-    Chat { text: String },
+    Chat {
+        text: String,
+    },
 }
 
+/// Nachrichten vom Server an den Browser.
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum OutgoingMessage {
-    Welcome {
-        id: u64,
-        name: String,
-    },
+    /// Antwort auf ein erfolgreiches Login.
+    /// Mit `id` erkennt das Frontend später seine eigenen Nachrichten.
+    Welcome { id: u64, name: String },
 
+    /// Geht an alle im Raum, auch an den Absender.
     Chat {
         sender_id: u64,
         sender_name: String,
@@ -26,12 +39,11 @@ pub enum OutgoingMessage {
         timestamp: u64,
     },
 
-    Error {
-        code: ErrorCode,
-        message: String,
-    },
+    /// Die Verbindung bleibt nach einem Fehler offen.
+    Error { code: ErrorCode, message: String },
 }
 
+/// Maschinenlesbare Fehlercodes. Bedeutungen stehen unter: `docs/protocol.md`
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
@@ -55,7 +67,7 @@ mod tests {
         let own_message = r#"{"type":"login", "name":"Alice"}"#;
 
         let json_data: IncomingMessage =
-            serde_json::from_str(own_message).expect("JSON konnte nicht geladen werden.");
+            serde_json::from_str(own_message).expect("JSON konnte nicht gelesen werden.");
 
         assert_eq!(login_message, json_data);
     }
@@ -69,7 +81,7 @@ mod tests {
         let own_message = r#"{"type":"chat", "text":"Hallo"}"#;
 
         let json_data: IncomingMessage =
-            serde_json::from_str(own_message).expect("JSON could not be read.");
+            serde_json::from_str(own_message).expect("JSON  konnte nicht gelesen werden.");
 
         assert_eq!(chat_message, json_data);
     }
@@ -104,8 +116,8 @@ mod tests {
             timestamp: 123,
         };
 
-        let json_data: String =
-            serde_json::to_string(&outgoing_message).expect("Could not turn...");
+        let json_data: String = serde_json::to_string(&outgoing_message)
+            .expect("Nachricht konnte nicht in JSON umgewandelt werden.");
 
         assert!(json_data.contains(r#""sender_name":"Alice""#));
         assert!(json_data.contains(r#""type":"chat""#));
@@ -115,11 +127,11 @@ mod tests {
     fn error_code_is_written_in_snake_case() {
         let outgoing_message = OutgoingMessage::Error {
             code: ErrorCode::NotLoggedIn,
-            message: ("Bitte zuerst anmelden.".to_string()),
+            message: "Bitte zuerst anmelden.".to_string(),
         };
 
-        let json_data =
-            serde_json::to_string(&outgoing_message).expect("Could not read from JSON.");
+        let json_data = serde_json::to_string(&outgoing_message)
+            .expect("Nachricht konnte nicht in JSON umgewandelt werden.");
 
         assert!(json_data.contains(r#""type":"error""#));
         assert!(json_data.contains(r#""code":"not_logged_in""#));

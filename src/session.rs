@@ -7,10 +7,10 @@ use std::time::{Duration, Instant};
 use actix::{Actor, ActorContext, Addr, AsyncContext, StreamHandler};
 use actix::{ActorFutureExt, Handler, WrapFuture};
 use actix_web_actors::ws::{self, WebsocketContext};
-use actix::prelude::*;
 
+use crate::chat_room::ChatMessage;
 use crate::protocol::{ErrorCode, IncomingMessage, OutgoingMessage};
-use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetRooms, ServerMessage};
+use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetHistory, GetRooms, ServerMessage};
 
 /// Eine WebSocket-Verbindung zu einem Browser.
 /// Hat zwei Zustände: verbunden, aber noch nicht angemeldet (`client_id` ist `None`),
@@ -93,7 +93,8 @@ impl ChatSession {
 
         match data {
             Ok(IncomingMessage::Login { name }) => self.handle_login(name, ctx),
-            Ok(IncomingMessage::Chat { text }) => self.handle_chat(text, ctx),
+            Ok(IncomingMessage::Chat { text, room }) => self.handle_chat(text, room, ctx),
+            Ok(IncomingMessage::History { room }) => self.handle_history(room, ctx),
             //* 
             Err(error) => {
                 println!("JSON-Parsing fehlgeschlagen: {error}");
@@ -125,6 +126,46 @@ impl ChatSession {
             });
 
         ctx.wait(future);
+    }
+
+    pub fn handle_history(&mut self, room: String, ctx: &mut WebsocketContext<Self>){
+        println!("handle-history aufgerufen");
+        let Some(id) = self.client_id else {
+            self.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                    code: ErrorCode::AlreadyLoggedIn,
+                    message: "Client is already logged in.".to_string(),
+                });
+            return;
+        };
+
+        let requested_room = room.clone();
+
+        let future = self.server_address.send(GetHistory {
+            room, client_id: id
+        }).into_actor(self)
+        .map(move |result, session, ctx|{
+            match result {
+                Ok(Some(messages)) => {
+                    let messages: Vec<ChatMessage> = messages.into_iter().map(|message| ChatMessage {
+                        sender_id: message.sender_id,
+                        sender_name: message.sender_name,
+                        text: message.text,
+                        timestamp: message.timestamp,
+                    }).collect();
+
+                    session.sending_outgoing_to_browser(ctx, OutgoingMessage::History { room: requested_room, messages });
+                }
+                Ok(None) => {
+                    eprintln!("Fehler beim Laden des Verlaufs: Raum nicht gefunden oder Client ist kein Mitglied");
+                }
+                Err(error) => {
+                    eprintln!("Fehler beim Laden des Verlaufs: {}", error);
+                    ctx.stop();
+                }
+            }
+        });
+        ctx.wait(future);
+
     }
 
     /// Prüft die Anmeldung, registriert die Session beim `ChatServer`
@@ -188,7 +229,7 @@ impl ChatSession {
 
     /// Leitet eine Chatnachricht an den `ChatServer` weiter.
     /// Leere oder zu lange Texte verwirft der `ChatServer` selbst.
-    pub fn handle_chat(&mut self, text: String, ctx: &mut WebsocketContext<Self>) {
+    pub fn handle_chat(&mut self, text: String, room: String,ctx: &mut WebsocketContext<Self>) {
         let Some(id) = self.client_id else {
             self.sending_outgoing_to_browser(
                 ctx,
@@ -204,7 +245,7 @@ impl ChatSession {
         self.server_address.do_send(ClientMessage {
             id,
             msg: text,
-            room: "welcome".to_string(),
+            room: room,
         });
     }
 }

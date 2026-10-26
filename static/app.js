@@ -6,6 +6,8 @@ const loginForm = document.getElementById("login-form");
 const usernameInput = document.getElementById("username-input");
 const roomsList = document.getElementById("rooms-list");
 
+let activeRoom = "welcome";
+
 loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
 
@@ -31,7 +33,8 @@ messageForm.addEventListener("submit", (event) => {
 
     const message = {
         type: "chat",
-        text: messageToSend
+        text: messageToSend,
+        room: activeRoom
     };
 
     ws.send(JSON.stringify(message));
@@ -54,7 +57,30 @@ ws.addEventListener("message", (event) => {
         for (var room of response.rooms) {
             const newRoom = document.createElement("li");
             newRoom.textContent = room;
+
+            newRoom.addEventListener("click", () => {
+                activeRoom = room;
+                console.log("Aktiver Raum:", activeRoom);
+
+                const message = {
+                    type: "history",
+                    room: activeRoom
+                }
+
+                ws.send(JSON.stringify(message));
+            })
+
             roomsList.appendChild(newRoom);
+        }
+    }
+
+    if(response.type === "history"){
+        messageList.replaceChildren();
+
+        for (const msg of response.messages){
+            const message = document.createElement("li");
+            message.textContent = `${msg.sender_name}: ${msg.text}`;
+            messageList.appendChild(message);
         }
     }
 

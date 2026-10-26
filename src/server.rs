@@ -1,7 +1,7 @@
 //! Der Kern des Chats: verwaltet Clients und Räume und verteilt Nachrichten.
 //! Kennt weder JSON noch WebSockets. Die Übersetzung übernimmt die `ChatSession`.
 
-use crate::chat_room::ChatRoom;
+use crate::chat_room::{ChatMessage, ChatRoom};
 use actix::prelude::*;
 use std::collections::HashMap;
 
@@ -52,6 +52,15 @@ pub struct ClientMessage {
 #[derive(Message)]
 #[rtype(result = "Vec<String>")]
 pub struct GetRooms;
+
+#[derive(Message)]
+#[rtype(result = "Option<Vec<ChatMessage>>")]
+
+// Ein Client ruft die Historie eines Chats auf. 
+pub struct GetHistory {
+    pub room: String,
+    pub client_id: u64
+}
 
 /// Ein Client tritt einem Raum bei. Existiert der Raum nicht, wird er angelegt.
 #[derive(Message)]
@@ -122,6 +131,19 @@ impl Handler<GetRooms> for ChatServer {
 
     fn handle(&mut self, message: GetRooms, _: &mut Context<Self>) -> Vec<String>{
         self.rooms.keys().cloned().collect()
+    }
+}
+
+impl Handler<GetHistory> for ChatServer{
+    type Result = MessageResult<GetHistory>;
+
+    fn handle(&mut self, message: GetHistory, _: &mut Context<Self>) -> Self::Result{
+        let history = self.rooms.get(&message.room).and_then(|room|{
+            if room.clients.contains(&message.client_id){
+                Some(room.messages.clone())
+            } else {None}
+        });
+        MessageResult(history)
     }
 }
 
@@ -204,7 +226,7 @@ impl Handler<ClientMessage> for ChatServer {
         let Some(client) = self.clients.get(&msg.id) else {
             return;
         };
-        let Some(room) = self.rooms.get(&msg.room) else {
+        let Some(room) = self.rooms.get_mut(&msg.room) else {
             return;
         };
 
@@ -229,6 +251,14 @@ impl Handler<ClientMessage> for ChatServer {
             room: msg.room,
             timestamp: chrono::Utc::now().timestamp_millis() as u64,
         };
+
+        room.add_message( ChatMessage
+            {sender_id: server_message.sender_id,
+            sender_name: server_message.sender_name.clone(),
+            text: server_message.text.clone(),
+            timestamp: server_message.timestamp,
+            }
+        );
 
         self.send_message(&server_message.room, &server_message);
     }

@@ -7,9 +7,10 @@ use std::time::{Duration, Instant};
 use actix::{Actor, ActorContext, Addr, AsyncContext, StreamHandler};
 use actix::{ActorFutureExt, Handler, WrapFuture};
 use actix_web_actors::ws::{self, WebsocketContext};
+use actix::prelude::*;
 
 use crate::protocol::{ErrorCode, IncomingMessage, OutgoingMessage};
-use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, ServerMessage};
+use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetRooms, ServerMessage};
 
 /// Eine WebSocket-Verbindung zu einem Browser.
 /// Hat zwei Zustände: verbunden, aber noch nicht angemeldet (`client_id` ist `None`),
@@ -87,24 +88,49 @@ impl ChatSession {
     /// Kaputtes JSON und unbekannte Nachrichtentypen ergeben beide `invalid_json`.
     /// Serde unterscheidet die beiden Fälle nicht ohne Weiteres.
     pub fn handle_incoming_text(&mut self, text: &str, ctx: &mut WebsocketContext<Self>) {
+        println!("Nachricht vom Client empfangen: {text}");
         let data: Result<IncomingMessage, serde_json::Error> = serde_json::from_str(text);
 
         match data {
             Ok(IncomingMessage::Login { name }) => self.handle_login(name, ctx),
             Ok(IncomingMessage::Chat { text }) => self.handle_chat(text, ctx),
-            Err(_) => self.sending_outgoing_to_browser(
+            //* 
+            Err(error) => {
+                println!("JSON-Parsing fehlgeschlagen: {error}");
+                self.sending_outgoing_to_browser(
                 ctx,
                 OutgoingMessage::Error {
                     code: ErrorCode::InvalidJson,
                     message: "Invalid JSON was sent in.".to_string(),
                 },
-            ),
+            ) }
         }
+    }
+
+    fn load_chatrooms(&mut self, ctx: &mut WebsocketContext<Self>) {
+        let server_address = self.server_address.clone();
+
+        let future = server_address.send(GetRooms).into_actor(self)
+            .map(|result, session, ctx| {
+                match result {
+                    Ok(rooms) => {
+                        session.sending_outgoing_to_browser(
+                            ctx,
+                            OutgoingMessage::RoomList {rooms },
+                        );}
+                    Err(error) => {
+                        eprintln!("Fehler beim Laden der Raumliste: {}",error
+                        );}
+                }
+            });
+
+        ctx.wait(future);
     }
 
     /// Prüft die Anmeldung, registriert die Session beim `ChatServer`
     /// und schickt dem Browser seine ID.
     pub fn handle_login(&mut self, name: String, ctx: &mut WebsocketContext<Self>) {
+        println!("handle-login wurde aufgerufen");
         if self.client_id.is_some() {
             self.sending_outgoing_to_browser(
                 ctx,
@@ -145,6 +171,9 @@ impl ChatSession {
                     session.client_id = Some(id);
                     println!("Anmeldung erfolgreich: {}!", name);
                     session.sending_outgoing_to_browser(ctx, OutgoingMessage::Welcome { id, name });
+
+                    //Chatrooms beim Chatserver abfragen
+                    session.load_chatrooms(ctx);
                 }
                 Err(_) => {
                     println!("ChatServer nicht erreichbar, Session wird beendet.");
@@ -185,10 +214,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ChatSession {
         match item {
             Ok(ws::Message::Text(text)) => self.handle_incoming_text(&text, ctx),
             Ok(ws::Message::Close(reason)) => {
+                println!("Browser sendet Close-Frame: {:?}", reason);
                 ctx.close(reason);
                 ctx.stop()
             }
-            Err(_) => ctx.stop(),
+            Err(error) => {
+                eprintln!("Websocket ProkotolError: {:?}", error);
+                ctx.stop();
+            }
             // Ping und Pong zählen als Lebenszeichen für den Heartbeat.
             Ok(ws::Message::Ping(bytes)) => {
                 self.last_heard_from_client = Instant::now();

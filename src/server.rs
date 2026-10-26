@@ -49,6 +49,10 @@ pub struct ClientMessage {
     pub room: String,
 }
 
+#[derive(Message)]
+#[rtype(result = "Vec<String>")]
+pub struct GetRooms;
+
 /// Ein Client tritt einem Raum bei. Existiert der Raum nicht, wird er angelegt.
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -110,6 +114,14 @@ impl ChatServer {
                 }
             }
         }
+    }
+}
+
+impl Handler<GetRooms> for ChatServer {
+    type Result = Vec<String>;
+
+    fn handle(&mut self, message: GetRooms, _: &mut Context<Self>) -> Vec<String>{
+        self.rooms.keys().cloned().collect()
     }
 }
 

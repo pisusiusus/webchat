@@ -3,8 +3,28 @@
     <head>
         <meta charset="UTF-8">
         <title>WebChat</title>
+        <script src="/app.js" defer></script>
     </head>
     <body>
-        <p>WebChat läuft.</p>
+        <main>
+            <h1>Webchat</h1>
+            <form id="login-form">
+                <label for="username">Set Name</label>
+                <input id="username-input" maxlength="20" placeholder="Enter Name" required/>
+                <button type="submit">Login</button>
+            </form>
+
+            <section id="rooms">
+                <ul id="rooms-list"></ul>
+            </section>
+
+            <section id="chat">
+                <div id="messages"></div>
+                <form id="message-send-form">
+                    <input id="message-input" maxlength="200" placeholder="Write a message..." required/>
+                    <button type="submit">Send</button>
+                </form>
+            </section>
+        </main>
     </body>
 </html>

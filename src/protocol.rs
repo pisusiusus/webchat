@@ -41,6 +41,10 @@ pub enum OutgoingMessage {
 
     /// Die Verbindung bleibt nach einem Fehler offen.
     Error { code: ErrorCode, message: String },
+    
+    RoomList {
+        rooms: Vec<String>,
+    },
 }
 
 /// Maschinenlesbare Fehlercodes. Bedeutungen stehen unter: `docs/protocol.md`

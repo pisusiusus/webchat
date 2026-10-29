@@ -1,43 +1,26 @@
-//! Die JSON-Nachrichten zwischen Browser und Server.
-//! Varianten- und Feldnamen sind gleichzeitig die JSON-Namen.
-//! Umbennenen ändert das Protokoll.
-
+//! JSON messages exchanged between the browser and server.
+use crate::chat_room::ChatMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::chat_room::ChatMessage;
-
-/// Nachrichten vom Browser an den Server.
-/// `tag = "type"`: Die Variante steht im JSON-Feld `type`,
-/// z. B. wird `Login` zu `"type":"login", ...`.
 #[derive(Deserialize, Debug, PartialEq)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum IncomingMessage {
-    /// Muss die erste Nachricht einer Verbindung sein.
-    Login {
-        name: String,
-    },
-
-    Chat {
-        text: String,
-        room: String
-    },
-
-    History {
-        room: String
-    }
+    Login { name: String },
+    Chat { text: String, room: String },
+    History { room: String },
+    CreateRoom { room: String },
+    JoinRoom { room: String },
+    LeaveRoom { room: String },
+    ListRooms,
 }
 
-/// Nachrichten vom Server an den Browser.
 #[derive(Serialize, Debug, PartialEq)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutgoingMessage {
-    /// Antwort auf ein erfolgreiches Login.
-    /// Mit `id` erkennt das Frontend später seine eigenen Nachrichten.
-    Welcome { id: u64, name: String },
-
-    /// Geht an alle im Raum, auch an den Absender.
+    Welcome {
+        id: u64,
+        name: String,
+    },
     Chat {
         sender_id: u64,
         sender_name: String,
@@ -45,21 +28,26 @@ pub enum OutgoingMessage {
         room: String,
         timestamp: u64,
     },
-
-    /// Die Verbindung bleibt nach einem Fehler offen.
-    Error { code: ErrorCode, message: String },
-
+    Error {
+        code: ErrorCode,
+        message: String,
+    },
     RoomList {
         rooms: Vec<String>,
+        joined_rooms: Vec<String>,
     },
-
     History {
         room: String,
-        messages: Vec<ChatMessage>
-    }
+        messages: Vec<ChatMessage>,
+    },
+    RoomJoined {
+        room: String,
+    },
+    RoomLeft {
+        room: String,
+    },
 }
 
-/// Maschinenlesbare Fehlercodes. Bedeutungen stehen unter: `docs/protocol.md`
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
@@ -67,90 +55,104 @@ pub enum ErrorCode {
     NotLoggedIn,
     AlreadyLoggedIn,
     InvalidName,
+    RoomOperationFailed,
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
     fn login_json_becomes_login_message() {
-        let login_message = IncomingMessage::Login {
-            name: "Alice".to_string(),
-        };
-
-        let own_message = r#"{"type":"login", "name":"Alice"}"#;
-
-        let json_data: IncomingMessage =
-            serde_json::from_str(own_message).expect("JSON konnte nicht gelesen werden.");
-
-        assert_eq!(login_message, json_data);
+        let parsed: IncomingMessage =
+            serde_json::from_str(r#"{"type":"login","name":"Alice"}"#).unwrap();
+        assert_eq!(
+            parsed,
+            IncomingMessage::Login {
+                name: "Alice".into()
+            }
+        );
     }
 
     #[test]
     fn chat_json_becomes_chat_message() {
-        let chat_message = IncomingMessage::Chat {
-            text: "Hallo".to_string(),
-            room: "welcome".to_string()
-        };
-
-        let own_message = r#"{"type":"chat", "text":"Hallo"}"#;
-
-        let json_data: IncomingMessage =
-            serde_json::from_str(own_message).expect("JSON  konnte nicht gelesen werden.");
-
-        assert_eq!(chat_message, json_data);
+        let parsed: IncomingMessage =
+            serde_json::from_str(r#"{"type":"chat","text":"Hallo","room":"welcome"}"#).unwrap();
+        assert_eq!(
+            parsed,
+            IncomingMessage::Chat {
+                text: "Hallo".into(),
+                room: "welcome".into(),
+            }
+        );
     }
 
     #[test]
     fn unknown_type_is_rejected() {
-        let own_message = r#"{"type":"unknown", "text":"Hallo"}"#;
-
-        let json_data: Result<IncomingMessage, serde_json::Error> =
-            serde_json::from_str(own_message);
-
-        assert!(json_data.is_err());
+        assert!(
+            serde_json::from_str::<IncomingMessage>(r#"{"type":"unknown","text":"Hallo"}"#,)
+                .is_err()
+        );
     }
 
     #[test]
     fn broken_json_is_rejected() {
-        let own_message = r#"{"type":"chat", "te"#;
-
-        let json_data: Result<IncomingMessage, serde_json::Error> =
-            serde_json::from_str(own_message);
-
-        assert!(json_data.is_err());
+        assert!(serde_json::from_str::<IncomingMessage>(r#"{"type":"chat","te"#,).is_err());
     }
 
     #[test]
     fn outgoing_chat_matches_protocol() {
-        let outgoing_message = OutgoingMessage::Chat {
+        let json = serde_json::to_string(&OutgoingMessage::Chat {
             sender_id: 1,
-            sender_name: "Alice".to_string(),
-            text: "Hallo".to_string(),
-            room: "welcome".to_string(),
+            sender_name: "Alice".into(),
+            text: "Hallo".into(),
+            room: "welcome".into(),
             timestamp: 123,
-        };
-
-        let json_data: String = serde_json::to_string(&outgoing_message)
-            .expect("Nachricht konnte nicht in JSON umgewandelt werden.");
-
-        assert!(json_data.contains(r#""sender_name":"Alice""#));
-        assert!(json_data.contains(r#""type":"chat""#));
+        })
+        .unwrap();
+        assert!(json.contains(r#""sender_name":"Alice""#));
+        assert!(json.contains(r#""type":"chat""#));
     }
 
     #[test]
     fn error_code_is_written_in_snake_case() {
-        let outgoing_message = OutgoingMessage::Error {
+        let json = serde_json::to_string(&OutgoingMessage::Error {
             code: ErrorCode::NotLoggedIn,
-            message: "Bitte zuerst anmelden.".to_string(),
-        };
+            message: "Please log in first.".into(),
+        })
+        .unwrap();
+        assert!(json.contains(r#""type":"error""#));
+        assert!(json.contains(r#""code":"not_logged_in""#));
+    }
 
-        let json_data = serde_json::to_string(&outgoing_message)
-            .expect("Nachricht konnte nicht in JSON umgewandelt werden.");
-
-        assert!(json_data.contains(r#""type":"error""#));
-        assert!(json_data.contains(r#""code":"not_logged_in""#));
+    #[test]
+    fn room_commands_are_deserialized() {
+        let cases = [
+            (
+                r#"{"type":"create_room","room":"general"}"#,
+                IncomingMessage::CreateRoom {
+                    room: "general".into(),
+                },
+            ),
+            (
+                r#"{"type":"join_room","room":"general"}"#,
+                IncomingMessage::JoinRoom {
+                    room: "general".into(),
+                },
+            ),
+            (
+                r#"{"type":"leave_room","room":"general"}"#,
+                IncomingMessage::LeaveRoom {
+                    room: "general".into(),
+                },
+            ),
+            (r#"{"type":"list_rooms"}"#, IncomingMessage::ListRooms),
+        ];
+        for (json, expected) in cases {
+            assert_eq!(
+                serde_json::from_str::<IncomingMessage>(json).unwrap(),
+                expected
+            );
+        }
     }
 }

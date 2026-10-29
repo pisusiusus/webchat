@@ -44,7 +44,7 @@ impl ChatRoom {
         &self.clients
     }
 
-    pub fn add_message(&mut self, message: ChatMessage){
+    pub fn add_message(&mut self, message: ChatMessage) {
         self.messages.push(message);
     }
 }

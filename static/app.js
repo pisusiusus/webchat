@@ -18,6 +18,23 @@ let bufferedMessages = [];
 let lastMessageDay = null;
 let toastTimer;
 
+// Paired colors: a saturated avatar background and a lighter name shade.
+// The name hash is deterministic, including across browsers and reloads.
+const PROFILE_COLORS = [
+    { avatar: "#5865f2", name: "#a6afff" },
+    { avatar: "#9858bd", name: "#d5a0f2" },
+    { avatar: "#258d80", name: "#6edac5" },
+    { avatar: "#b15a69", name: "#f39bac" },
+    { avatar: "#a47135", name: "#edbf7c" },
+    { avatar: "#3979b5", name: "#88c4f6" },
+    { avatar: "#a34f94", name: "#ec9cdb" },
+    { avatar: "#52883e", name: "#a8d982" },
+];
+function profileColors(name) {
+    let hash = 0;
+    for (const char of name) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
+    return PROFILE_COLORS[hash % PROFILE_COLORS.length];
+}
 function showToast(text, error = false) {
     clearTimeout(toastTimer);
     $("toast").textContent = text;
@@ -45,12 +62,6 @@ function setConnection(text, state) {
 function initials(name) {
     return Array.from(name.trim()).slice(0, 2).join("").toUpperCase() || "?";
 }
-function avatarColor(name) {
-    const colors = ["#5865f2", "#9858bd", "#258d80", "#b15a69", "#a47135", "#3979b5"];
-    let hash = 0;
-    for (const char of name) hash = (hash * 31 + char.codePointAt(0)) >>> 0;
-    return colors[hash % colors.length];
-}
 function setSidebar(open) {
     document.body.classList.toggle("sidebar-open", open);
     $("sidebar-backdrop").hidden = !open;
@@ -67,7 +78,7 @@ function updateControls() {
     $("character-count").textContent = `${messageInput.value.length}/200`;
     $("character-count").classList.toggle("near-limit", messageInput.value.length >= 180);
     messageInput.placeholder = activeRoom ? `Message #${activeRoom}` : "Select a channel to start chatting";
-    for (const id of ["rail-create", "open-create", "create-channel-link", "create-room-button"]) {
+    for (const id of ["open-create", "create-channel-link", "create-room-button"]) {
         $(id).disabled = !connected || !loggedIn || busy;
     }
     $("room-name-input").disabled = roomActionPending;
@@ -98,12 +109,14 @@ function appendMessage(message) {
         messageList.appendChild(divider);
         lastMessageDay = day;
     }
+    const colors = profileColors(message.sender_name);
     const item = document.createElement("li");
     item.className = "message";
+    item.style.setProperty("--avatar-color", colors.avatar);
+    item.style.setProperty("--name-color", colors.name);
     const avatar = document.createElement("div");
     avatar.className = "avatar";
     avatar.textContent = initials(message.sender_name);
-    avatar.style.setProperty("--avatar-color", avatarColor(message.sender_name));
     avatar.setAttribute("aria-hidden", "true");
     const body = document.createElement("div");
     body.className = "message-body";
@@ -209,7 +222,7 @@ function openCreate() {
     if (!createDialog.open) createDialog.showModal();
     $("room-name-input").focus();
 }
-for (const id of ["rail-create", "open-create", "create-channel-link"]) $(id).addEventListener("click", openCreate);
+for (const id of ["open-create", "create-channel-link"]) $(id).addEventListener("click", openCreate);
 for (const id of ["close-create", "cancel-create"]) $(id).addEventListener("click", () => createDialog.close());
 $("sidebar-toggle").addEventListener("click", () => setSidebar(!document.body.classList.contains("sidebar-open")));
 $("sidebar-backdrop").addEventListener("click", () => setSidebar(false));
@@ -261,9 +274,11 @@ ws.addEventListener("message", (event) => {
             loginPending = false;
             currentUserId = response.id;
             currentName = response.name;
+            const colors = profileColors(currentName);
             $("current-user").textContent = currentName;
+            $("current-user").style.setProperty("--name-color", colors.name);
             $("user-avatar").textContent = initials(currentName);
-            $("user-avatar").style.setProperty("--avatar-color", avatarColor(currentName));
+            $("user-avatar").style.setProperty("--avatar-color", colors.avatar);
             loginDialog.close();
             setConnection("Connected", "connected");
             updateControls();

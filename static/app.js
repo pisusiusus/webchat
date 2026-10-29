@@ -40,6 +40,8 @@ function updateChat(){
 
     document.getElementById("rooms").hidden = !loggedIn;
     document.getElementById("chat").hidden = !loggedIn;
+
+    loginForm.style.display = loggedIn ? "none" : "";
 }
 
 function switchRoom(room){

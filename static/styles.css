@@ -36,6 +36,10 @@ input, button {
     margin: 8px 0;
 }
 
+#rooms-list li button {
+    margin-right: 8px;
+}
+
 #messages {
     min-height: 200px;
     max-height: 400px;

@@ -37,6 +37,9 @@ function updateChat(){
     roomInput.disabled = !loggedIn;
     createRoomForm.querySelector("button").disabled = !loggedIn;
     activeRoomTitle.textContent = loggedIn ? (activeRoom || "Join a room to chat") : "Please log in";
+
+    document.getElementById("rooms").hidden = !loggedIn;
+    document.getElementById("chat").hidden = !loggedIn;
 }
 
 function switchRoom(room){

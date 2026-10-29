@@ -14,15 +14,23 @@
                 <button type="submit">Login</button>
             </form>
 
+            <p id="error-message" role="alert"></p>
+
             <section id="rooms">
+                <form id="create-room-form">
+                    <label for="room-input">Create Room</label>
+                    <input id="room-input" maxlength="30" placeholder="Enter room name" required disabled/>
+                    <button type="submit" disabled>Create</button>
+                </form>
                 <ul id="rooms-list"></ul>
             </section>
 
             <section id="chat">
+                <h2 id="active-room">Please log in</h2>
                 <div id="messages"></div>
                 <form id="message-send-form">
-                    <input id="message-input" maxlength="200" placeholder="Write a message..." required/>
-                    <button type="submit">Send</button>
+                    <input id="message-input" maxlength="200" placeholder="Write a message..." required disabled/>
+                    <button type="submit" disabled>Send</button>
                 </form>
             </section>
         </main>

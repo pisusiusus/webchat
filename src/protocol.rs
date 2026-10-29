@@ -25,6 +25,20 @@ pub enum IncomingMessage {
 
     History {
         room: String
+    },
+
+    GetRooms,
+
+    CreateRoom {
+        room: String
+    },
+
+    JoinRoom {
+        room: String
+    },
+
+    LeaveRoom {
+        room: String
     }
 }
 
@@ -56,6 +70,14 @@ pub enum OutgoingMessage {
     History {
         room: String,
         messages: Vec<ChatMessage>
+    },
+
+    RoomJoined {
+        room: String
+    },
+
+    RoomLeft {
+        room: String
     }
 }
 
@@ -67,6 +89,7 @@ pub enum ErrorCode {
     NotLoggedIn,
     AlreadyLoggedIn,
     InvalidName,
+    RoomError,
 }
 
 #[cfg(test)]
@@ -95,7 +118,7 @@ mod tests {
             room: "welcome".to_string()
         };
 
-        let own_message = r#"{"type":"chat", "text":"Hallo"}"#;
+        let own_message = r#"{"type":"chat", "text":"Hallo", "room":"welcome"}"#;
 
         let json_data: IncomingMessage =
             serde_json::from_str(own_message).expect("JSON  konnte nicht gelesen werden.");
@@ -152,5 +175,21 @@ mod tests {
 
         assert!(json_data.contains(r#""type":"error""#));
         assert!(json_data.contains(r#""code":"not_logged_in""#));
+    }
+
+    #[test]
+    fn room_requests_match_protocol() {
+        let messages = [
+            (r#"{"type":"create_room","room":"general"}"#, IncomingMessage::CreateRoom { room: "general".to_string() }),
+            (r#"{"type":"join_room","room":"general"}"#, IncomingMessage::JoinRoom { room: "general".to_string() }),
+            (r#"{"type":"leave_room","room":"general"}"#, IncomingMessage::LeaveRoom { room: "general".to_string() }),
+            (r#"{"type":"get_rooms"}"#, IncomingMessage::GetRooms),
+        ];
+
+        for (json, expected) in messages {
+            let message: IncomingMessage = serde_json::from_str(json)
+                .expect("JSON konnte nicht gelesen werden.");
+            assert_eq!(message, expected);
+        }
     }
 }

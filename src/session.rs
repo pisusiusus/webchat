@@ -11,6 +11,7 @@ use actix_web_actors::ws::{self, WebsocketContext};
 use crate::chat_room::ChatMessage;
 use crate::protocol::{ErrorCode, IncomingMessage, OutgoingMessage};
 use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetHistory, GetRooms, ServerMessage};
+use crate::server::{ManageRoom, RoomAction};
 
 /// Eine WebSocket-Verbindung zu einem Browser.
 /// Hat zwei Zustände: verbunden, aber noch nicht angemeldet (`client_id` ist `None`),
@@ -95,6 +96,10 @@ impl ChatSession {
             Ok(IncomingMessage::Login { name }) => self.handle_login(name, ctx),
             Ok(IncomingMessage::Chat { text, room }) => self.handle_chat(text, room, ctx),
             Ok(IncomingMessage::History { room }) => self.handle_history(room, ctx),
+            Ok(IncomingMessage::GetRooms) => self.load_chatrooms(ctx),
+            Ok(IncomingMessage::CreateRoom { room }) => self.handle_room(room, RoomAction::Create, ctx),
+            Ok(IncomingMessage::JoinRoom { room }) => self.handle_room(room, RoomAction::Join, ctx),
+            Ok(IncomingMessage::LeaveRoom { room }) => self.handle_room(room, RoomAction::Leave, ctx),
             //* 
             Err(error) => {
                 println!("JSON-Parsing fehlgeschlagen: {error}");
@@ -109,6 +114,14 @@ impl ChatSession {
     }
 
     fn load_chatrooms(&mut self, ctx: &mut WebsocketContext<Self>) {
+        if self.client_id.is_none() {
+            self.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                code: ErrorCode::NotLoggedIn,
+                message: "Client is not logged in.".to_string(),
+            });
+            return;
+        }
+
         let server_address = self.server_address.clone();
 
         let future = server_address.send(GetRooms).into_actor(self)
@@ -128,12 +141,54 @@ impl ChatSession {
         ctx.wait(future);
     }
 
+    fn handle_room(&mut self, room: String, action: RoomAction, ctx: &mut WebsocketContext<Self>) {
+        let Some(id) = self.client_id else {
+            self.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                code: ErrorCode::NotLoggedIn,
+                message: "Client is not logged in.".to_string(),
+            });
+            return;
+        };
+
+        let room = room.trim().to_string();
+        let requested_room = room.clone();
+
+        let future = self.server_address.send(ManageRoom {
+            room,
+            client_id: id,
+            action,
+        }).into_actor(self)
+        .map(move |result, session, ctx| {
+            match result {
+                Ok(Ok(())) => {
+                    let message = match action {
+                        RoomAction::Create | RoomAction::Join => OutgoingMessage::RoomJoined { room: requested_room },
+                        RoomAction::Leave => OutgoingMessage::RoomLeft { room: requested_room },
+                    };
+                    session.sending_outgoing_to_browser(ctx, message);
+                    session.load_chatrooms(ctx);
+                }
+                Ok(Err(message)) => {
+                    session.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                        code: ErrorCode::RoomError,
+                        message: message.to_string(),
+                    });
+                }
+                Err(error) => {
+                    eprintln!("Fehler beim Verwalten des Raums: {}", error);
+                    ctx.stop();
+                }
+            }
+        });
+        ctx.wait(future);
+    }
+
     pub fn handle_history(&mut self, room: String, ctx: &mut WebsocketContext<Self>){
         println!("handle-history aufgerufen");
         let Some(id) = self.client_id else {
             self.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
-                    code: ErrorCode::AlreadyLoggedIn,
-                    message: "Client is already logged in.".to_string(),
+                    code: ErrorCode::NotLoggedIn,
+                    message: "Client is not logged in.".to_string(),
                 });
             return;
         };
@@ -157,6 +212,10 @@ impl ChatSession {
                 }
                 Ok(None) => {
                     eprintln!("Fehler beim Laden des Verlaufs: Raum nicht gefunden oder Client ist kein Mitglied");
+                    session.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                        code: ErrorCode::RoomError,
+                        message: "Room does not exist or client is not a member.".to_string(),
+                    });
                 }
                 Err(error) => {
                     eprintln!("Fehler beim Laden des Verlaufs: {}", error);

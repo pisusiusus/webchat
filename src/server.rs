@@ -94,6 +94,21 @@ pub struct Disconnect {
     pub client_id: u64,
 }
 
+#[derive(Clone, Copy)]
+pub enum RoomAction {
+    Create,
+    Join,
+    Leave,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), &'static str>")]
+pub struct ManageRoom {
+    pub room: String,
+    pub client_id: u64,
+    pub action: RoomAction,
+}
+
 impl Actor for ChatServer {
     type Context = Context<Self>;
 }
@@ -123,6 +138,54 @@ impl ChatServer {
                 }
             }
         }
+    }
+}
+
+impl ChatServer {
+    fn manage_room(&mut self, msg: ManageRoom) -> Result<(), &'static str> {
+        if !self.clients.contains_key(&msg.client_id) {
+            return Err("Client is not logged in.");
+        }
+
+        if msg.room.trim().is_empty() || msg.room.chars().count() > 30 {
+            return Err("Room names must contain between 1 and 30 characters.");
+        }
+
+        match msg.action {
+            RoomAction::Create => {
+                if self.rooms.contains_key(&msg.room) {
+                    return Err("Room already exists.");
+                }
+
+                let mut room = ChatRoom::new();
+                room.join(msg.client_id);
+                self.rooms.insert(msg.room, room);
+            }
+            RoomAction::Join => {
+                let Some(room) = self.rooms.get_mut(&msg.room) else {
+                    return Err("Room does not exist.");
+                };
+                room.join(msg.client_id);
+            }
+            RoomAction::Leave => {
+                let Some(room) = self.rooms.get_mut(&msg.room) else {
+                    return Err("Room does not exist.");
+                };
+                if !room.leave(msg.client_id) {
+                    return Err("Client is not a member of this room.");
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Handler<ManageRoom> for ChatServer {
+    type Result = MessageResult<ManageRoom>;
+
+    fn handle(&mut self, msg: ManageRoom, _: &mut Context<Self>) -> Self::Result {
+        MessageResult(self.manage_room(msg))
     }
 }
 
@@ -528,5 +591,89 @@ mod tests {
         let messages_alice = received(&receiver_alice).await;
 
         assert_eq!(messages_alice.len(), 0);
+    }
+
+    async fn manage_room(server: &Addr<ChatServer>, id: u64, room: &str, action: RoomAction) -> Result<(), &'static str> {
+        server.send(ManageRoom {
+            room: room.to_string(),
+            client_id: id,
+            action,
+        }).await.expect("Raum konnte nicht verwaltet werden.")
+    }
+
+    #[actix::test]
+    async fn created_room_can_be_joined_and_left() {
+        let server = ChatServer::new().start();
+        let (id_alice, receiver_alice) = connect(&server, "Alice").await;
+        let (id_bob, receiver_bob) = connect(&server, "Bob").await;
+
+        assert!(manage_room(&server, id_alice, "general", RoomAction::Create).await.is_ok());
+        assert!(manage_room(&server, id_bob, "general", RoomAction::Join).await.is_ok());
+        write(&server, id_alice, "general", "Hallo").await;
+        assert_eq!(received(&receiver_alice).await.len(), 1);
+        assert_eq!(received(&receiver_bob).await.len(), 1);
+
+        assert!(manage_room(&server, id_bob, "general", RoomAction::Leave).await.is_ok());
+        write(&server, id_alice, "general", "Noch da?").await;
+        assert_eq!(received(&receiver_alice).await.len(), 1);
+        assert!(received(&receiver_bob).await.is_empty());
+
+        let history = server.send(GetHistory {
+            room: "general".to_string(),
+            client_id: id_bob,
+        }).await.unwrap();
+        assert!(history.is_none());
+
+        write(&server, id_bob, "general", "Nicht erlaubt").await;
+        assert!(received(&receiver_alice).await.is_empty());
+
+        assert!(manage_room(&server, id_bob, "general", RoomAction::Join).await.is_ok());
+        let history = server.send(GetHistory {
+            room: "general".to_string(),
+            client_id: id_bob,
+        }).await.unwrap().unwrap();
+        assert_eq!(history.len(), 2);
+    }
+
+    #[actix::test]
+    async fn duplicate_rooms_and_unknown_joins_are_rejected() {
+        let server = ChatServer::new().start();
+        let (id, _receiver) = connect(&server, "Alice").await;
+
+        assert!(manage_room(&server, id, "welcome", RoomAction::Create).await.is_err());
+        assert!(manage_room(&server, id, "missing", RoomAction::Join).await.is_err());
+        assert!(manage_room(&server, id, "missing", RoomAction::Leave).await.is_err());
+        assert_eq!(server.send(GetRooms).await.unwrap(), vec!["welcome".to_string()]);
+    }
+
+    #[actix::test]
+    async fn invalid_room_names_and_unknown_clients_are_rejected() {
+        let server = ChatServer::new().start();
+        let (id, _receiver) = connect(&server, "Alice").await;
+
+        assert!(manage_room(&server, id, "   ", RoomAction::Create).await.is_err());
+        assert!(manage_room(&server, id, &"a".repeat(31), RoomAction::Create).await.is_err());
+        assert!(manage_room(&server, 999, "general", RoomAction::Create).await.is_err());
+        assert!(manage_room(&server, 999, "welcome", RoomAction::Join).await.is_err());
+        assert_eq!(server.send(GetRooms).await.unwrap(), vec!["welcome".to_string()]);
+    }
+
+    #[actix::test]
+    async fn empty_rooms_keep_their_history() {
+        let server = ChatServer::new().start();
+        let (id, _receiver) = connect(&server, "Alice").await;
+
+        assert!(manage_room(&server, id, "general", RoomAction::Create).await.is_ok());
+        write(&server, id, "general", "Hallo").await;
+        assert!(manage_room(&server, id, "general", RoomAction::Leave).await.is_ok());
+        assert!(server.send(GetRooms).await.unwrap().contains(&"general".to_string()));
+        assert!(manage_room(&server, id, "general", RoomAction::Join).await.is_ok());
+
+        let history = server.send(GetHistory {
+            room: "general".to_string(),
+            client_id: id,
+        }).await.unwrap().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].text, "Hallo");
     }
 }

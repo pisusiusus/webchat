@@ -1,39 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>WebChat</title>
-    <script src="/app.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#313338">
+  <title>WebChat</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
 </head>
 <body>
-    <main>
-        <h1>WebChat</h1>
-        <p id="status" role="status">Connecting…</p>
-        <form id="login-form">
-            <label for="username-input">Name</label>
-            <input id="username-input" maxlength="20" placeholder="Enter name" required>
-            <button type="submit">Login</button>
+  <div class="app-shell">
+    <nav class="server-rail" aria-label="Workspace">
+      <a class="server-icon selected" href="/" aria-label="WebChat home">W</a>
+      <div class="rail-divider"></div>
+      <button class="server-icon add-server" id="rail-create" type="button" aria-label="Create a channel" title="Create a channel">+</button>
+      <span class="rail-label">WC</span>
+    </nav>
+
+    <button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="Close channels" hidden></button>
+    <aside class="sidebar" id="channel-sidebar" aria-label="Channels">
+      <header class="workspace-header"><span class="workspace-mark">W</span><strong>WebChat</strong><span class="workspace-badge">LOCAL</span></header>
+      <div class="sidebar-scroll">
+        <div class="workspace-intro"><span class="eyebrow">YOUR SPACE TO TALK</span><p>Good conversations start here.</p></div>
+        <div class="channel-group-header"><h2>Your channels <span id="joined-count">0</span></h2><button class="icon-button" id="open-create" aria-label="Create a channel" title="Create a channel" type="button">+</button></div>
+        <ul id="joined-rooms" class="channel-list"></ul>
+        <p id="no-joined" class="sidebar-hint">Join a channel to get started.</p>
+        <div class="channel-group-header discover-heading"><h2>Discover <span id="discover-count">0</span></h2></div>
+        <ul id="available-rooms" class="channel-list"></ul>
+        <p id="no-available" class="sidebar-hint">You've joined every channel.</p>
+        <button id="create-channel-link" class="create-channel-link" type="button"><span>+</span> Create a channel</button>
+      </div>
+      <footer class="user-panel">
+        <div class="avatar user-avatar" id="user-avatar">?</div>
+        <div class="user-details"><strong id="current-user">Not signed in</strong><span id="connection-label"><i class="connection-dot"></i>Connecting…</span></div>
+      </footer>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="chat-header">
+        <button id="sidebar-toggle" class="icon-button mobile-menu" type="button" aria-label="Open channels" aria-controls="channel-sidebar" aria-expanded="false">☰</button>
+        <span class="header-hash" aria-hidden="true">#</span>
+        <h1 id="channel-title">welcome</h1>
+        <span class="header-divider"></span><p id="channel-description">A place for your conversations</p>
+        <button id="leave-channel" class="leave-button" type="button" hidden>Leave channel</button>
+      </header>
+      <div id="connection-banner" class="connection-banner" role="status" hidden></div>
+      <section id="message-scroll" class="message-scroll" aria-label="Conversation" tabindex="0">
+        <div class="channel-welcome">
+          <div class="welcome-hash" aria-hidden="true">#</div>
+          <h2 id="welcome-title">Welcome to WebChat</h2>
+          <p id="welcome-description">Pick a channel and make yourself at home.</p>
+        </div>
+        <p id="history-state" class="history-state" role="status" hidden>Loading conversation…</p>
+        <ol id="messages" class="messages" aria-label="Messages"></ol>
+      </section>
+      <div class="composer-area">
+        <form id="message-send-form" class="composer">
+          <span class="composer-hash" aria-hidden="true">#</span>
+          <label class="sr-only" for="message-input">Message</label>
+          <input id="message-input" autocomplete="off" maxlength="200" placeholder="Select a channel to start chatting" required disabled>
+          <span id="character-count" class="character-count">0/200</span>
+          <button id="send-button" class="send-button" type="submit" aria-label="Send message" title="Send message" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m4 4 17 8-17 8 3-8-3-8Zm3 8h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </form>
-        <section id="rooms">
-            <h2>Rooms</h2>
-            <form id="create-room-form">
-                <label for="room-name-input">New room</label>
-                <input id="room-name-input" maxlength="40" pattern="[A-Za-z0-9_-]+"
-                       placeholder="general" required>
-                <button id="create-room-button" type="submit" disabled>Create and join</button>
-            </form>
-            <ul id="rooms-list"></ul>
-        </section>
-        <section id="chat">
-            <h2 id="active-room-title">No room selected</h2>
-            <ul id="messages"></ul>
-            <form id="message-send-form">
-                <input id="message-input" maxlength="200" placeholder="Write a message…"
-                       required disabled>
-                <button id="send-button" type="submit" disabled>Send</button>
-            </form>
-        </section>
+        <p class="composer-hint"><span>Press <kbd>Enter</kbd> to send</span><span>Rooms and messages are stored in memory.</span></p>
+      </div>
     </main>
+  </div>
+
+  <dialog id="login-dialog" class="modal login-modal" aria-labelledby="login-title">
+    <div class="modal-brand">W</div><h2 id="login-title">Welcome back.</h2><p class="modal-subtitle">Grab a name and join the conversation.</p>
+    <form id="login-form">
+      <label class="field-label" for="username-input">DISPLAY NAME <span>*</span></label>
+      <input class="text-field" id="username-input" maxlength="20" autocomplete="nickname" placeholder="What should we call you?" required autofocus>
+      <p class="form-error" id="login-error" role="alert" hidden></p>
+      <button class="primary-button full-width" id="login-button" type="submit" disabled>Connecting…</button>
+    </form>
+    <p class="modal-footnote">No account needed. Your name is for this session only.</p>
+  </dialog>
+
+  <dialog id="create-dialog" class="modal" aria-labelledby="create-title">
+    <button id="close-create" class="modal-close icon-button" type="button" aria-label="Close">×</button>
+    <h2 id="create-title">Create a channel</h2><p class="modal-subtitle">A new corner of your community.</p>
+    <form id="create-room-form">
+      <label class="field-label" for="room-name-input">CHANNEL NAME <span>*</span></label>
+      <div class="channel-name-field"><span aria-hidden="true">#</span><input class="text-field" id="room-name-input" maxlength="40" pattern="[A-Za-z0-9_-]+" autocomplete="off" placeholder="e.g. general" required></div>
+      <p class="field-help">1–40 letters, numbers, underscores or hyphens. Names are case-sensitive.</p>
+      <p id="create-error" class="form-error" role="alert" hidden></p>
+      <div class="modal-actions"><button id="cancel-create" class="text-button" type="button">Cancel</button><button id="create-room-button" class="primary-button" type="submit">Create channel</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

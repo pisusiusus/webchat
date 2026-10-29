@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::chat_room::ChatMessage;
+
 /// Nachrichten vom Browser an den Server.
 /// `tag = "type"`: Die Variante steht im JSON-Feld `type`,
 /// z. B. wird `Login` zu `"type":"login", ...`.
@@ -18,7 +20,12 @@ pub enum IncomingMessage {
 
     Chat {
         text: String,
+        room: String
     },
+
+    History {
+        room: String
+    }
 }
 
 /// Nachrichten vom Server an den Browser.
@@ -41,6 +48,15 @@ pub enum OutgoingMessage {
 
     /// Die Verbindung bleibt nach einem Fehler offen.
     Error { code: ErrorCode, message: String },
+
+    RoomList {
+        rooms: Vec<String>,
+    },
+
+    History {
+        room: String,
+        messages: Vec<ChatMessage>
+    }
 }
 
 /// Maschinenlesbare Fehlercodes. Bedeutungen stehen unter: `docs/protocol.md`
@@ -76,6 +92,7 @@ mod tests {
     fn chat_json_becomes_chat_message() {
         let chat_message = IncomingMessage::Chat {
             text: "Hallo".to_string(),
+            room: "welcome".to_string()
         };
 
         let own_message = r#"{"type":"chat", "text":"Hallo"}"#;

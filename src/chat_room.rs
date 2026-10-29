@@ -1,9 +1,21 @@
 use std::collections::HashSet;
 
-/// Ein Chatraum. Speichert nur, welche Clients Mitglied sind.
+use serde::Serialize;
+
+// Struct für die Messages, die im Verlauf gespeichert werden.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ChatMessage {
+    pub sender_id: u64,
+    pub sender_name: String,
+    pub text: String,
+    pub timestamp: u64,
+}
+
+/// Ein Chatraum. Speichert, welche Clients Mitglied sind und den Nachrichtenverlauf.
 /// Namen und Adressen der Clients verwaltet der `ChatServer`.
 pub struct ChatRoom {
     pub clients: HashSet<u64>,
+    pub messages: Vec<ChatMessage>,
 }
 
 impl ChatRoom {
@@ -11,6 +23,7 @@ impl ChatRoom {
     pub fn new() -> Self {
         Self {
             clients: HashSet::new(),
+            messages: Vec::new(),
         }
     }
 
@@ -29,5 +42,9 @@ impl ChatRoom {
     /// Gibt die IDs aller Mitglieder zurück.
     pub fn get_members(&self) -> &HashSet<u64> {
         &self.clients
+    }
+
+    pub fn add_message(&mut self, message: ChatMessage){
+        self.messages.push(message);
     }
 }

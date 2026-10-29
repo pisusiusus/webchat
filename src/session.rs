@@ -8,8 +8,9 @@ use actix::{Actor, ActorContext, Addr, AsyncContext, StreamHandler};
 use actix::{ActorFutureExt, Handler, WrapFuture};
 use actix_web_actors::ws::{self, WebsocketContext};
 
+use crate::chat_room::ChatMessage;
 use crate::protocol::{ErrorCode, IncomingMessage, OutgoingMessage};
-use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, ServerMessage};
+use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetHistory, GetRooms, ServerMessage};
 
 /// Eine WebSocket-Verbindung zu einem Browser.
 /// Hat zwei Zustände: verbunden, aber noch nicht angemeldet (`client_id` ist `None`),
@@ -87,24 +88,90 @@ impl ChatSession {
     /// Kaputtes JSON und unbekannte Nachrichtentypen ergeben beide `invalid_json`.
     /// Serde unterscheidet die beiden Fälle nicht ohne Weiteres.
     pub fn handle_incoming_text(&mut self, text: &str, ctx: &mut WebsocketContext<Self>) {
+        println!("Nachricht vom Client empfangen: {text}");
         let data: Result<IncomingMessage, serde_json::Error> = serde_json::from_str(text);
 
         match data {
             Ok(IncomingMessage::Login { name }) => self.handle_login(name, ctx),
-            Ok(IncomingMessage::Chat { text }) => self.handle_chat(text, ctx),
-            Err(_) => self.sending_outgoing_to_browser(
+            Ok(IncomingMessage::Chat { text, room }) => self.handle_chat(text, room, ctx),
+            Ok(IncomingMessage::History { room }) => self.handle_history(room, ctx),
+            //* 
+            Err(error) => {
+                println!("JSON-Parsing fehlgeschlagen: {error}");
+                self.sending_outgoing_to_browser(
                 ctx,
                 OutgoingMessage::Error {
                     code: ErrorCode::InvalidJson,
                     message: "Invalid JSON was sent in.".to_string(),
                 },
-            ),
+            ) }
         }
+    }
+
+    fn load_chatrooms(&mut self, ctx: &mut WebsocketContext<Self>) {
+        let server_address = self.server_address.clone();
+
+        let future = server_address.send(GetRooms).into_actor(self)
+            .map(|result, session, ctx| {
+                match result {
+                    Ok(rooms) => {
+                        session.sending_outgoing_to_browser(
+                            ctx,
+                            OutgoingMessage::RoomList {rooms },
+                        );}
+                    Err(error) => {
+                        eprintln!("Fehler beim Laden der Raumliste: {}",error
+                        );}
+                }
+            });
+
+        ctx.wait(future);
+    }
+
+    pub fn handle_history(&mut self, room: String, ctx: &mut WebsocketContext<Self>){
+        println!("handle-history aufgerufen");
+        let Some(id) = self.client_id else {
+            self.sending_outgoing_to_browser(ctx, OutgoingMessage::Error {
+                    code: ErrorCode::AlreadyLoggedIn,
+                    message: "Client is already logged in.".to_string(),
+                });
+            return;
+        };
+
+        let requested_room = room.clone();
+
+        let future = self.server_address.send(GetHistory {
+            room, client_id: id
+        }).into_actor(self)
+        .map(move |result, session, ctx|{
+            match result {
+                Ok(Some(messages)) => {
+                    let messages: Vec<ChatMessage> = messages.into_iter().map(|message| ChatMessage {
+                        sender_id: message.sender_id,
+                        sender_name: message.sender_name,
+                        text: message.text,
+                        timestamp: message.timestamp,
+                    }).collect();
+
+                    session.sending_outgoing_to_browser(ctx, OutgoingMessage::History { room: requested_room, messages });
+                }
+                Ok(None) => {
+                    eprintln!("Fehler beim Laden des Verlaufs: Raum nicht gefunden oder Client ist kein Mitglied");
+                }
+                Err(error) => {
+                    eprintln!("Fehler beim Laden des Verlaufs: {}", error);
+                    ctx.stop();
+                }
+            }
+        });
+        ctx.wait(future);
+
     }
 
     /// Prüft die Anmeldung, registriert die Session beim `ChatServer`
     /// und schickt dem Browser seine ID.
     pub fn handle_login(&mut self, name: String, ctx: &mut WebsocketContext<Self>) {
+        println!("handle-login wurde aufgerufen");
         if self.client_id.is_some() {
             self.sending_outgoing_to_browser(
                 ctx,
@@ -145,6 +212,9 @@ impl ChatSession {
                     session.client_id = Some(id);
                     println!("Anmeldung erfolgreich: {}!", name);
                     session.sending_outgoing_to_browser(ctx, OutgoingMessage::Welcome { id, name });
+
+                    //Chatrooms beim Chatserver abfragen
+                    session.load_chatrooms(ctx);
                 }
                 Err(_) => {
                     println!("ChatServer nicht erreichbar, Session wird beendet.");
@@ -159,7 +229,7 @@ impl ChatSession {
 
     /// Leitet eine Chatnachricht an den `ChatServer` weiter.
     /// Leere oder zu lange Texte verwirft der `ChatServer` selbst.
-    pub fn handle_chat(&mut self, text: String, ctx: &mut WebsocketContext<Self>) {
+    pub fn handle_chat(&mut self, text: String, room: String,ctx: &mut WebsocketContext<Self>) {
         let Some(id) = self.client_id else {
             self.sending_outgoing_to_browser(
                 ctx,
@@ -175,7 +245,7 @@ impl ChatSession {
         self.server_address.do_send(ClientMessage {
             id,
             msg: text,
-            room: "welcome".to_string(),
+            room: room,
         });
     }
 }
@@ -185,10 +255,14 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ChatSession {
         match item {
             Ok(ws::Message::Text(text)) => self.handle_incoming_text(&text, ctx),
             Ok(ws::Message::Close(reason)) => {
+                println!("Browser sendet Close-Frame: {:?}", reason);
                 ctx.close(reason);
                 ctx.stop()
             }
-            Err(_) => ctx.stop(),
+            Err(error) => {
+                eprintln!("Websocket ProkotolError: {:?}", error);
+                ctx.stop();
+            }
             // Ping und Pong zählen als Lebenszeichen für den Heartbeat.
             Ok(ws::Message::Ping(bytes)) => {
                 self.last_heard_from_client = Instant::now();

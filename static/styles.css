@@ -1,0 +1,54 @@
+body {
+    font-family: system-ui, sans-serif;
+    color: #222;
+    background: #f7f7f7;
+    margin: 0;
+}
+
+main {
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+section {
+    margin-top: 24px;
+}
+
+form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+input, button {
+    font: inherit;
+    padding: 6px 10px;
+}
+
+#rooms-list {
+    padding: 0;
+    list-style: none;
+}
+
+#rooms-list li {
+    margin: 8px 0;
+}
+
+#messages {
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
+    background: white;
+    border: 1px solid #ddd;
+    padding: 12px;
+    margin-bottom: 12px;
+    line-height: 1.6;
+    list-style: none;
+}
+
+#error-message {
+    color: #b42318;
+}

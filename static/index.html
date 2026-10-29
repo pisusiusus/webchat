@@ -1,30 +1,39 @@
 <!DOCTYPE html>
-<html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <title>WebChat</title>
-        <script src="/app.js" defer></script>
-    </head>
-    <body>
-        <main>
-            <h1>Webchat</h1>
-            <form id="login-form">
-                <label for="username">Set Name</label>
-                <input id="username-input" maxlength="20" placeholder="Enter Name" required/>
-                <button type="submit">Login</button>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebChat</title>
+    <script src="/app.js" defer></script>
+</head>
+<body>
+    <main>
+        <h1>WebChat</h1>
+        <p id="status" role="status">Connecting…</p>
+        <form id="login-form">
+            <label for="username-input">Name</label>
+            <input id="username-input" maxlength="20" placeholder="Enter name" required>
+            <button type="submit">Login</button>
+        </form>
+        <section id="rooms">
+            <h2>Rooms</h2>
+            <form id="create-room-form">
+                <label for="room-name-input">New room</label>
+                <input id="room-name-input" maxlength="40" pattern="[A-Za-z0-9_-]+"
+                       placeholder="general" required>
+                <button id="create-room-button" type="submit" disabled>Create and join</button>
             </form>
-
-            <section id="rooms">
-                <ul id="rooms-list"></ul>
-            </section>
-
-            <section id="chat">
-                <div id="messages"></div>
-                <form id="message-send-form">
-                    <input id="message-input" maxlength="200" placeholder="Write a message..." required/>
-                    <button type="submit">Send</button>
-                </form>
-            </section>
-        </main>
-    </body>
+            <ul id="rooms-list"></ul>
+        </section>
+        <section id="chat">
+            <h2 id="active-room-title">No room selected</h2>
+            <ul id="messages"></ul>
+            <form id="message-send-form">
+                <input id="message-input" maxlength="200" placeholder="Write a message…"
+                       required disabled>
+                <button id="send-button" type="submit" disabled>Send</button>
+            </form>
+        </section>
+    </main>
+</body>
 </html>

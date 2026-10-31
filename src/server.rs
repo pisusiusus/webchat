@@ -62,6 +62,12 @@ pub struct GetHistory {
     pub client_id: u64
 }
 
+#[derive(Message)]
+#[rtype(result = "bool")]
+pub struct CreateRoom {
+    pub name: String,
+}
+
 /// Ein Client tritt einem Raum bei. Existiert der Raum nicht, wird er angelegt.
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -123,6 +129,19 @@ impl ChatServer {
                 }
             }
         }
+    }
+}
+
+impl Handler<CreateRoom> for ChatServer {
+    type Result = bool;
+
+    fn handle(&mut self, msg: CreateRoom, _: &mut Self::Context) -> Self::Result {
+        if self.rooms.contains_key(&msg.name){
+            return false;
+        }
+
+        self.rooms.insert(msg.name, ChatRoom::new());
+        true
     }
 }
 

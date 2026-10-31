@@ -10,7 +10,7 @@ use actix_web_actors::ws::{self, WebsocketContext};
 
 use crate::chat_room::ChatMessage;
 use crate::protocol::{ErrorCode, IncomingMessage, OutgoingMessage};
-use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetHistory, GetRooms, ServerMessage};
+use crate::server::{ChatServer, ClientMessage, Connect, Disconnect, GetHistory, GetRooms, ServerMessage, CreateRoom};
 
 /// Eine WebSocket-Verbindung zu einem Browser.
 /// Hat zwei Zustände: verbunden, aber noch nicht angemeldet (`client_id` ist `None`),
@@ -95,6 +95,7 @@ impl ChatSession {
             Ok(IncomingMessage::Login { name }) => self.handle_login(name, ctx),
             Ok(IncomingMessage::Chat { text, room }) => self.handle_chat(text, room, ctx),
             Ok(IncomingMessage::History { room }) => self.handle_history(room, ctx),
+            Ok(IncomingMessage::CreateRoom { room }) => self.handle_createRoom(room, ctx),
             //* 
             Err(error) => {
                 println!("JSON-Parsing fehlgeschlagen: {error}");
@@ -125,6 +126,26 @@ impl ChatSession {
                 }
             });
 
+        ctx.wait(future);
+    }
+
+    pub fn handle_createRoom(&mut self, room: String, ctx: &mut WebsocketContext<Self>){
+        println!("handle-createRoom aufgerufen");
+        let server_adress = self.server_address.clone();
+
+        let future = server_adress.send(CreateRoom { name: room })
+            .into_actor(self)
+            .map(|result, session, ctx| {
+                match result {
+                Ok(true) => {
+                    session.load_chatrooms(ctx);
+                }
+                    Ok(false) => {println!("Raum existiert bereits");}
+                    Err(error) => {
+                        eprint!("Fehler: {}", error);
+                    }
+                }
+            });
         ctx.wait(future);
     }
 

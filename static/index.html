@@ -19,11 +19,24 @@
             </section>
 
             <section id="chat">
+
                 <div id="messages"></div>
                 <form id="message-send-form">
                     <input id="message-input" maxlength="200" placeholder="Write a message..." required/>
                     <button type="submit">Send</button>
                 </form>
+                
+                <button id="open-createRoom-popup">create Rooom</button>
+
+                <dialog id="room-popup">
+                    <form id="create-room-form">
+                        <h2>Neuen Raum erstellen</h2>
+
+                        <input type="text" id="createRoom-input" placeholder="Roomname" required>
+                        <button type="submit">Erstellen</button>
+                        <button type="button" id="close-createRoom-popup">Abbrechen</button>
+                    </form>
+                </dialog>
             </section>
         </main>
     </body>

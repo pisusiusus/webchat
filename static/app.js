@@ -5,12 +5,43 @@ const messageForm = document.getElementById("message-send-form");
 const loginForm = document.getElementById("login-form");
 const usernameInput = document.getElementById("username-input");
 const roomsList = document.getElementById("rooms-list");
+const chatSection = document.getElementById("chat");
+const createRoomForm = document.getElementById("create-room-form");
+const openPopupButton = document.getElementById("open-createRoom-popup");
+const closePopupButton = document.getElementById("close-createRoom-popup")
+const roomPopup = document.getElementById("room-popup");
+const roomNameInput = document.getElementById("createRoom-input");
 
 let activeRoom = "welcome";
 let isLoggedIn = false;
 
 loginForm.style.display = "block";
-messageForm.style.display = "none";
+chatSection.style.display = "none";
+
+//Popup öffnen
+openPopupButton.addEventListener("click", () => {
+    roomPopup.showModal();
+});
+
+//Popup schließen
+closePopupButton.addEventListener("click", () => {
+    roomPopup.close();
+})
+
+createRoomForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const roomName = roomNameInput.value.trim();
+
+    const message = {
+        type: "create_room",
+        room: roomName
+    };
+
+    ws.send(JSON.stringify(message));
+    roomPopup.close();
+
+});
 
 loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -52,7 +83,7 @@ ws.addEventListener("message", (event) => {
         isLoggedIn = true;
 
         loginForm.style.display = "none";
-        messageForm.style.display = "block";
+        chatSection.style.display = "block";
     }
 
     if(response.type == "chat"){
@@ -62,7 +93,9 @@ ws.addEventListener("message", (event) => {
     }
 
     if (response.type == "room_list"){
-        for (var room of response.rooms) {
+        roomsList.replaceChildren();
+
+        for (const room of response.rooms) {
             const newRoom = document.createElement("li");
             newRoom.textContent = room;
 

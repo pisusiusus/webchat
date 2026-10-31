@@ -23,6 +23,10 @@ pub enum IncomingMessage {
         room: String
     },
 
+    CreateRoom {
+        room: String
+    },
+
     History {
         room: String
     }

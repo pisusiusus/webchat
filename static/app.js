@@ -7,6 +7,10 @@ const usernameInput = document.getElementById("username-input");
 const roomsList = document.getElementById("rooms-list");
 
 let activeRoom = "welcome";
+let isLoggedIn = false;
+
+loginForm.style.display = "block";
+messageForm.style.display = "none";
 
 loginForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -45,6 +49,10 @@ ws.addEventListener("message", (event) => {
 
     if(response.type == "welcome"){
         console.log("Client: Login erfolgreich");
+        isLoggedIn = true;
+
+        loginForm.style.display = "none";
+        messageForm.style.display = "block";
     }
 
     if(response.type == "chat"){
@@ -88,9 +96,6 @@ ws.addEventListener("message", (event) => {
         console.log("Fehler:");
     }
 });
-
-
-
 
 //debug Logs
 ws.addEventListener("open", () => {
